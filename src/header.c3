@@ -1,5 +1,6 @@
 module http;
 import std::collections::list;
+import std::io;
 
 def StringList = List<String>;
 
@@ -61,23 +62,28 @@ fn void Header.del(Header *h, String name)
     }
 }
 
-fn void Header.append_to(Header *h, DString* out)
+fn usz! Header.write_to(Header* h, Stream* out)
 {
-    out.reserve(h.size);
+    char[4] buf = { ':', ' ', '\r', '\n' };
+    char[] colon = buf[0:1];
+    char[] space = buf[1:1];
+    char[] crlf = buf[2:2];
     // https://www.rfc-editor.org/rfc/rfc7230.html#section-3.2
+    usz n;
     foreach(field : h.fields)
     {
-        out.append_chars(field.name);
-        out.append_char(':');
+        n += out.write(field.name)!;
+        n += out.write(colon)!;
         foreach (i, value : field.values.array_view())
         {
-            if (i > 0) out.append_char(' ');
-            out.append_chars(value);
+            if (i > 0) n += out.write(space)!;
+            n += out.write(value)!;
         }
-        out.append_chars("\r\n");
+        out.write(crlf)!;
     }
     // End of fields.
-    out.append_chars("\r\n");
+    n += out.write(crlf)!;
+    return n;
 }
 
 // Header fields.
@@ -86,25 +92,28 @@ fn void! Header.parse(Header *h, String str)
 {
     while (true)
     {
-        String line = tokenize(str, '\n')!;
-        if (line.len == 1 && line[0] == '\r') break;
-        str = str[line.len+1:];
+        usz! eol = str.index_of("\r\n");
+        if (catch eol) return HeaderError.INVALID_HEADERFIELD?;
+        String line = str[:eol];
+        if (line.len == 0) break;
+        str = str[eol+2:];
         // Field name.
-        String name = tokenize(line, ':')!;
+        Cut cut_field = cut(line, ':');
+        String name = cut_field.before;
         if (name.len == 0 || name[name.len-1] == ' ') return HeaderError.INVALID_HEADERFIELD?;
-        line = line[name.len+1:];
+        line = cut_field.after;
         // Field values.
         while (true)
         {
             line = line.trim();
-            String! value = tokenize(line, ' ');
-            if (catch value)
+            Cut cut_value = cut(line, ' ');
+            if (cut_value.before.len == 0)
             {
                 h.set(name, line);
                 break;
             }
-            h.set(name, value);
-            line = line[value.len+1:];
+            h.set(name, cut_value.before);
+            line = cut_value.after;
         }
     }
 }
