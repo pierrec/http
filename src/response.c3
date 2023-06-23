@@ -35,20 +35,24 @@ fn void! Response.parse(Response* resp, Stream* from, Request* req)
 
     // Status line.
     // https://www.rfc-editor.org/rfc/rfc7230.html#section-3.1.2
-    c = cut(str, '/');
-    if (c.before.len == 0) return ResponseError.INVALID_PROTO?;
-    resp.proto = c.before;
-    str = c.after;
-
-    c = cut(str, '.');
-    if (c.before.len != 1) return ResponseError.INVALID_PROTO_MAJOR?;
-    resp.proto_major = c.before[0];
-    str = c.after;
-
-    c = cut(str, ' ');
-    if (c.before.len != 1) return ResponseError.INVALID_PROTO_MINOR?;
-    resp.proto_minor = c.before[0];
-    str = c.after;
+    // https://www.rfc-editor.org/rfc/rfc7230.html#section-2.6
+    const HTTP10 = "HTTP/1.0 ";
+    const HTTP11 = "HTTP/1.1 ";
+    switch
+    {
+    case str.starts_with(HTTP10):
+        resp.proto = HTTP10[:HTTP10.len - 1];
+        resp.proto_major = '1';
+        resp.proto_minor = '0';
+        str = str[HTTP10.len:];
+    case str.starts_with(HTTP11):
+        resp.proto = HTTP11[:HTTP11.len - 1];
+        resp.proto_major = '1';
+        resp.proto_minor = '1';
+        str = str[HTTP11.len:];
+    default:
+        return ResponseError.INVALID_PROTO?;
+    }
 
     c = cut(str, ' ');
     String code = c.before;

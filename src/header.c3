@@ -24,7 +24,19 @@ fault HeaderError
     INVALID_HEADERFIELD,
 }
 
-fn void Header.set(Header *h, String name, String value)
+fn void Header.free(Header* h)
+{
+    foreach (&field : h.fields) field.values.free();
+    h.fields.free();
+}
+
+fn StringList Header.get(Header *h, String name)
+{
+    if (canonicalize(name)) foreach (&field : h.fields) if (field.name == name) return field.values;
+    return {};
+}
+
+fn void Header.set(Header *h, String name, String value, bool replace = false)
 {
     if (!canonicalize(name)) return;
     if (value.len == 0) return;
@@ -32,6 +44,7 @@ fn void Header.set(Header *h, String name, String value)
     {
         if (field.name == name)
         {
+            if (replace) field.values.clear();
             h.size += (field.values.len() == 0 ? 0 : 1) + value.len;
             field.values.append(value);
             return;

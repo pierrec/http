@@ -32,7 +32,7 @@ fn int main(String[] args)
     Client client;
     Request req = {
         .method = GET,
-        .url = { .host = "www.example.com", .port = "80", .path = "/" },
+        .url = { .host = "www.example.com:80", .path = "/" },
         .proto = "HTTP",
         .proto_major = 1,
         .proto_minor = 1,

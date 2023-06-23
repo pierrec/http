@@ -3,8 +3,7 @@ module http;
 struct Url
 {
     String scheme;
-    String host;
-    String port;
+    String host; // host or host:port
     String user;
     String password;
     String path;
