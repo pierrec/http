@@ -1,4 +1,5 @@
 module http;
+import std::encoding;
 import std::io;
 import std::net;
 
@@ -36,9 +37,21 @@ fn void! Client.do_request(Client* c, Request* req, Response* resp)
         StringList auth = req.header.get(AUTH_HEADER);
         if (auth.len() == 0)
         {
-            String basic = string::tprintf("Basic %s:%s", req.url.user, req.url.password);
-            // TODO base64 encoding
-            req.header.set(AUTH_HEADER, basic);
+            const PREFIX = "Basic ";
+            String creds = string::tprintf("%s:%s", req.url.user, req.url.password);
+
+            Base64Encoder enc;
+            enc.init(base64::URL_ALPHABET)!;
+            usz enc_len = enc.encode_len(creds.len);
+
+            ByteWriter bw;
+            bw.tinit();
+            bw.ensure_capacity(PREFIX.len + enc_len)!;
+            bw.write(PREFIX)!;
+            usz n = enc.encode(creds, bw.bytes[bw.index:])!;
+            bw.bytes = bw.bytes[:bw.index+n];
+
+            req.header.set(AUTH_HEADER, bw.as_str());
             with_auth = true;
         }
     }
