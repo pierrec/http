@@ -101,14 +101,16 @@ fn usz! Header.write_to(Header* h, Stream* out)
 
 // Header fields.
 // https://www.rfc-editor.org/rfc/rfc7230.html#section-3.2.4
-fn void! Header.parse(Header *h, String str)
+fn usz! Header.parse(Header *h, String str)
 {
+    usz hn;
     while (true)
     {
         usz! eol = str.index_of("\r\n");
         if (catch eol) return HeaderError.INVALID_HEADERFIELD?;
+        hn += eol + 2;
         String line = str[:eol];
-        if (line.len == 0) break;
+        if (line.len == 0) return hn;
         str = str[eol+2:];
         // Field name.
         Cut cut_field = cut(line, ':');

@@ -13,6 +13,10 @@ struct Response
     Header header;
     isz    content_length;
     char[] body;
+
+    // Internal fields.
+    Allocator* allocator;
+    char[] bytes;
 }
 
 fault ResponseError
@@ -25,13 +29,28 @@ fault ResponseError
     PARSE_ERROR,
 }
 
+/**
+ * @require using != null "A valid allocator must be provided"
+ **/
+fn void Response.init(Response* resp, Allocator* using = mem::heap())
+{
+    *resp = { .allocator = using };
+}
+
+fn void! Response.free(Response* resp)
+{
+    resp.header.free();
+    resp.allocator.free(resp.bytes.ptr)!;
+}
+
 fn void! Response.parse(Response* resp, Stream* from, Request* req)
 {
+    resp.header.free();
     ByteWriter bw;
-    bw.init();
+    bw.init(resp.allocator);
+    bw.bytes = resp.bytes;
     bw.read_from(from)!;
     String str = bw.as_str();
-    Cut c;
 
     // Status line.
     // https://www.rfc-editor.org/rfc/rfc7230.html#section-3.1.2
@@ -54,11 +73,12 @@ fn void! Response.parse(Response* resp, Stream* from, Request* req)
         return ResponseError.INVALID_PROTO?;
     }
 
+    Cut c;
     c = cut(str, ' ');
     String code = c.before;
     if (code.len != 3) return ResponseError.INVALID_STATUS?;
     if (!is_digit(code[0]) || !is_digit(code[1]) || !is_digit(code[2])) return ResponseError.INVALID_STATUS?;
-    resp.status_code = (ushort)(code[0] - '0')*100 + (ushort)(code[1] - '0') + (ushort)(code[2] - '0');
+    resp.status_code = (ushort)(code[0] - '0')*100 + (ushort)(code[1] - '0')*10 + (ushort)(code[2] - '0');
     str = c.after;
 
     usz! eol = str.index_of("\r\n");
@@ -66,8 +86,8 @@ fn void! Response.parse(Response* resp, Stream* from, Request* req)
     resp.status = str[:eol];
     str = str[eol+2:];
 
-    resp.header.parse(str)!;
+    usz hn = resp.header.parse(str)!;
 
     // Body.
-    resp.body = str;
+    resp.body = str[hn:];
 }

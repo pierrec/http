@@ -12,7 +12,7 @@ struct CookieJar
     String todo;
 }
 
-fn Response! Client.do_request(Client* c, Request* req)
+fn void! Client.do_request(Client* c, Request* req, Response* resp)
 {
     // TODO handle redirects.
     Cut host_port = cut(req.url.host, ':');
@@ -27,7 +27,7 @@ fn Response! Client.do_request(Client* c, Request* req)
 
     // The client does not support persistent connections.
     // https://www.rfc-editor.org/rfc/rfc7230.html#section-6.1
-    req.header.set("Connection", "close");
+    req.header.set("Connection", "close", true);
 
     const AUTH_HEADER = "Authorization";
     bool with_auth;
@@ -47,8 +47,5 @@ fn Response! Client.do_request(Client* c, Request* req)
 
     req.write_to(&sock_stream)!;
 
-    Response resp;
     resp.parse(&sock_stream, req)!;
-
-    return resp;
 }

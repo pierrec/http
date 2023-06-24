@@ -22,8 +22,8 @@ fn usz! Request.write_to(Request* req, Stream* out)
     defer msg.free();
     msg.printf("%s %s %s/%d.%d\r\n", req.method.name, req.url.path, req.proto, req.proto_major, req.proto_minor);
 
-    usz n = out.write(msg.str())!;
-    n += req.header.write_to(out)!;
+    Stream msg_stream = msg.as_stream();
+    req.header.write_to(&msg_stream)!;
 
-    return n;
+    return out.write(msg.str())!;
 }

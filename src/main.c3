@@ -37,7 +37,9 @@ fn int main(String[] args)
         .proto_major = 1,
         .proto_minor = 1,
     };
-    Response resp = client.do_request(&req)!!;
+    Response resp;
+    resp.init();
+    client.do_request(&req, &resp)!!;
     //io::printn(resp.status);
     io::printn(resp.body);
 
