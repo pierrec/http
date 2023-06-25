@@ -5,15 +5,15 @@ import std::io;
 def StringList = List<String>;
 
 // https://www.rfc-editor.org/rfc/rfc7230.html#section-2.1
-struct Header
+struct HTTPHeader
 {
-     HeaderList fields;
+     HTTPHeaderList fields;
      usz size;
 }
 
-def HeaderList = List<HeaderField>;
+def HTTPHeaderList = List<HTTPHeaderField>;
 
-struct HeaderField
+struct HTTPHeaderField
 {
     String name;
     StringList values;
@@ -24,19 +24,19 @@ fault HeaderError
     INVALID_HEADERFIELD,
 }
 
-fn void Header.free(Header* h)
+fn void HTTPHeader.free(HTTPHeader* h)
 {
     foreach (&field : h.fields) field.values.free();
     h.fields.free();
 }
 
-fn StringList Header.get(Header *h, String name)
+fn StringList HTTPHeader.get(HTTPHeader *h, String name)
 {
     if (canonicalize(name)) foreach (&field : h.fields) if (field.name == name) return field.values;
     return {};
 }
 
-fn void Header.set(Header *h, String name, String value, bool replace = false)
+fn void HTTPHeader.set(HTTPHeader *h, String name, String value, bool replace = false)
 {
     if (!canonicalize(name)) return;
     if (value.len == 0) return;
@@ -54,12 +54,12 @@ fn void Header.set(Header *h, String name, String value, bool replace = false)
     // Add the name and value lengths plus the ':' field separator
     // and the terminating newline (CRLF).
     h.size += name.len + 1 + value.len + 2;
-    HeaderField field = { .name = name };
+    HTTPHeaderField field = { .name = name };
     field.values.append(value);
     h.fields.append(field);
 }
 
-fn void Header.del(Header *h, String name)
+fn void HTTPHeader.del(HTTPHeader *h, String name)
 {
     if (!canonicalize(name)) return;
     foreach (i, &field : h.fields)
@@ -75,7 +75,7 @@ fn void Header.del(Header *h, String name)
     }
 }
 
-fn usz! Header.write_to(Header* h, Stream* out)
+fn usz! HTTPHeader.write_to(HTTPHeader* h, Stream* out)
 {
     char[4] buf = { ':', ' ', '\r', '\n' };
     char[] colon = buf[0:1];
@@ -101,7 +101,7 @@ fn usz! Header.write_to(Header* h, Stream* out)
 
 // Header fields.
 // https://www.rfc-editor.org/rfc/rfc7230.html#section-3.2.4
-fn usz! Header.parse(Header *h, String str)
+fn usz! HTTPHeader.parse(HTTPHeader *h, String str)
 {
     usz hn;
     while (true)
@@ -153,8 +153,8 @@ fn bool canonicalize(String s)
             !string::char_in_set(cc, "!#$%&'*+-.^_`|~")) return false;
         switch
         {
-        case with_hyphen && 'a' <= cc && cc <= 'z': *c = cc - 'a' + 'A';
-        case !with_hyphen && 'A' <= cc && cc <= 'Z': *c = cc - 'A' + 'a';
+            case with_hyphen && 'a' <= cc && cc <= 'z': *c = cc - 'a' + 'A';
+            case !with_hyphen && 'A' <= cc && cc <= 'Z': *c = cc - 'A' + 'a';
         }
         with_hyphen = cc == '-';
     }

@@ -3,7 +3,7 @@ import std::encoding;
 import std::io;
 import std::net;
 
-struct Client
+struct HTTPClient
 {
     CookieJar jar;
 }
@@ -13,7 +13,13 @@ struct CookieJar
     String todo;
 }
 
-fn void! Client.do_request(Client* c, Request* req, Response* resp)
+struct Cookie
+{
+    String name;
+    String value;
+}
+
+fn void! HTTPClient.do_request(HTTPClient* c, HTTPRequest* req, HTTPResponse* resp)
 {
     // TODO handle redirects.
     Cut host_port = cut(req.url.host, ':');

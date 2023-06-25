@@ -3,23 +3,23 @@ import std::io;
 import std::collections::list;
 
 // https://www.rfc-editor.org/rfc/rfc7230.html#section-3.1.2
-struct Response
+struct HTTPResponse
 {
-    ushort status_code;
-    String status;
-    String proto;
-    char   proto_major;
-    char   proto_minor;
-    Header header;
-    isz    content_length;
-    char[] body;
+    HTTPStatusCode status_code;
+    String         status;
+    String         proto;
+    char           proto_major;
+    char           proto_minor;
+    HTTPHeader     header;
+    isz            content_length;
+    char[]         body;
 
     // Internal fields.
     Allocator* allocator;
     char[] bytes;
 }
 
-fault ResponseError
+fault HTTPResponseError
 {
     INVALID_PROTO,
     INVALID_PROTO_MAJOR,
@@ -32,18 +32,43 @@ fault ResponseError
 /**
  * @require using != null "A valid allocator must be provided"
  **/
-fn void Response.init(Response* resp, Allocator* using = mem::heap())
+fn void HTTPResponse.init(HTTPResponse* resp, Allocator* using = mem::heap())
 {
     *resp = { .allocator = using };
 }
 
-fn void! Response.free(Response* resp)
+fn void! HTTPResponse.free(HTTPResponse* resp)
 {
     resp.header.free();
     resp.allocator.free(resp.bytes.ptr)!;
 }
 
-fn void! Response.parse(Response* resp, Stream* from, Request* req)
+fn usz! HTTPResponse.write_to(HTTPResponse* resp, Stream* out)
+{
+    if (!resp.status_code.is_valid()) return HTTPResponseError.INVALID_STATUS?;
+    resp.status = resp.status_code.as_str();
+    resp.proto = HTTP11;
+    resp.proto_major = 1;
+    resp.proto_minor = 1;
+
+    // TODO date header
+    resp.header.set("Date", "", true);
+
+    DString msg;
+    msg.tinit(resp.proto.len + 5 + resp.status.len + resp.header.size + 2);
+    defer msg.free();
+    msg.printf("%s %d %s\r\n", resp.proto, resp.status_code, resp.status);
+
+    Stream msg_stream = msg.as_stream();
+    usz written = resp.header.write_to(&msg_stream)!;
+
+    written += out.write(msg.str())!;
+    written += out.write(resp.body)!;
+
+    return written;
+}
+
+fn void! HTTPResponse.parse(HTTPResponse* resp, Stream* from, HTTPRequest* req)
 {
     resp.header.free();
     ByteWriter bw;
@@ -55,39 +80,37 @@ fn void! Response.parse(Response* resp, Stream* from, Request* req)
     // Status line.
     // https://www.rfc-editor.org/rfc/rfc7230.html#section-3.1.2
     // https://www.rfc-editor.org/rfc/rfc7230.html#section-2.6
-    const HTTP10 = "HTTP/1.0 ";
-    const HTTP11 = "HTTP/1.1 ";
     switch
     {
-    case str.starts_with(HTTP10):
-        resp.proto = HTTP10[:HTTP10.len - 1];
-        resp.proto_major = '1';
-        resp.proto_minor = '0';
-        str = str[HTTP10.len:];
-    case str.starts_with(HTTP11):
-        resp.proto = HTTP11[:HTTP11.len - 1];
-        resp.proto_major = '1';
-        resp.proto_minor = '1';
-        str = str[HTTP11.len:];
-    default:
-        return ResponseError.INVALID_PROTO?;
+        case str.starts_with(HTTP10):
+            resp.proto = HTTP10;
+            resp.proto_major = '1';
+            resp.proto_minor = '0';
+        case str.starts_with(HTTP11):
+            resp.proto = HTTP11;
+            resp.proto_major = '1';
+            resp.proto_minor = '1';
+        default:
+            return HTTPResponseError.INVALID_PROTO?;
     }
+    str = str[resp.proto.len:];
+    if (str.len > 0 && str[0] != ' ') return HTTPResponseError.INVALID_PROTO?;
+    str = str[1:];
 
     Cut c;
     c = cut(str, ' ');
     String code = c.before;
-    if (code.len != 3) return ResponseError.INVALID_STATUS?;
-    if (!is_digit(code[0]) || !is_digit(code[1]) || !is_digit(code[2])) return ResponseError.INVALID_STATUS?;
+    if (code.len != 3) return HTTPResponseError.INVALID_STATUS?;
+    if (!is_digit(code[0]) || !is_digit(code[1]) || !is_digit(code[2])) return HTTPResponseError.INVALID_STATUS?;
     resp.status_code = (ushort)(code[0] - '0')*100 + (ushort)(code[1] - '0')*10 + (ushort)(code[2] - '0');
+    if (!resp.status_code.is_valid()) return HTTPResponseError.INVALID_STATUS?;
     str = c.after;
 
     usz! eol = str.index_of("\r\n");
-    if (catch eol) return ResponseError.INVALID_STATUSLINE?;
+    if (catch eol) return HTTPResponseError.INVALID_STATUSLINE?;
     resp.status = str[:eol];
     str = str[eol+2:];
 
     usz hn = resp.header.parse(str)!;
-
-    // Body.
-    resp.body = str[hn:];
+    resp.body = hn < str.len ? str[hn:] : "";
 }

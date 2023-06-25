@@ -5,43 +5,37 @@ import std::io;
 
 fn int main(String[] args)
 {
-//    ZString host = "www.example.com";
-//    ZString service = "80";
-//    AddrInfo hints = { .ai_family = net::os::AF_INET, .ai_socktype = net::SOCK_STREAM };
-//    AddrInfo* res;
-//    int errcode = os::getaddrinfo(host, service, &hints, &res);
-//    if (errcode != 0) return libc::os::errno();
-//    defer net::os::freeaddrinfo(res);
-//
-//    NativeSocket sockfd = os::socket(res.ai_family, res.ai_socktype, res.ai_protocol);
-//    if (sockfd < 0) return libc::os::errno();
-//    defer sockfd.close()!!;
-//    io::printfn("sockfd=%d, %d %d", sockfd, res.ai_addr, res.ai_addrlen);
-//
-//    errcode = net::os::connect(sockfd, res.ai_addr, res.ai_addrlen);
-//    io::printf("connecting..");
-//    if (errcode != 0) return libc::os::errno();
-//    io::print("connected.");
-//
-//    char[] header = "GET /\n\n\nHTTP/1.1\r\n";
-//    usz n = libc::write(sockfd, header, header.len);
-//
-//    char[2048] buf;
-//    n = libc::read(sockfd, &buf, buf.len);
-//    io::printfn("%s", buf[:n]);
-    Client client;
-    Request req = {
+    //do_client();
+    do_server();
+    return 0;
+}
+
+fn void do_client()
+{
+    HTTPClient client;
+    HTTPRequest req = {
         .method = GET,
         .url = { .host = "www.example.com:80", .path = "/" },
         .proto = "HTTP",
         .proto_major = 1,
         .proto_minor = 1,
     };
-    Response resp;
+    HTTPResponse resp;
     resp.init();
     client.do_request(&req, &resp)!!;
     //io::printn(resp.status);
     io::printn(resp.body);
+}
 
-	return 0;
+fn void do_server()
+{
+    HTTPServer server;
+    server.init("localhost:8081", 10000000)!!;
+    server.serve(&handler)!!;
+}
+
+fn void handler(HTTPRequest* req, HTTPResponse* resp)
+{
+    resp.status_code = 200;
+    resp.body = "Hello world";
 }
